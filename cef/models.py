@@ -22,11 +22,6 @@ class Node(BaseModel):
     def get_by_fingerprint(fp):
         return Node.query.filter_by(fingerprint=fp).first()
 
-# success match logs the successful payload
-# fail match discards the payload
-# anything other than the above conditions is considered erroneous
-# and will requeue the payload
-
 class Attack(BaseModel):
     __tablename__ = 'attacks'
     method = db.Column(db.String, nullable=False)

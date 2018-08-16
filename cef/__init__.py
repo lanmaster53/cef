@@ -10,7 +10,7 @@ DEBUG = True
 SECRET_KEY = 'dosentmatter'
 SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(basedir, 'cef.db')
 SQLALCHEMY_TRACK_MODIFICATIONS = False
-CREDS_PATH = '/Users/lanmaster/Desktop/cors-exploit/creds.txt'
+CREDS_PATH = '/Users/lanmaster/Development/Repositories/cef/creds.txt'
 
 app = Flask(__name__)
 app.config.from_object(__name__)
