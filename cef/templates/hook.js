@@ -1,10 +1,15 @@
-var source = new EventSource("{{ url_for('stream_attack', _external=True) }}");
-source.onmessage = function (event) {
+var evtSource = new EventSource("{{ url_for('stream_attack', _external=True) }}");
+
+evtSource.addEventListener('message', event => {
     var data = JSON.parse(event.data);
-    //console.log(data);
-    //sendAttack(data);
     executeAttack(data);
-};
+}, false);
+
+function teardownStream(event) {
+    evtSource.close();
+}
+
+window.addEventListener('beforeunload', teardownStream, false);
 
 // https://developers.google.com/web/ilt/pwa/working-with-the-fetch-api
 
@@ -49,7 +54,7 @@ function executeAttack(data) {
 }
 
 function reportResult(result, id, payload) {
-    fetch("{{ url_for('result', _external=True) }}", {
+    fetch("{{ url_for('report_result', _external=True) }}", {
         method: "POST",
         body: JSON.stringify({id: id, result: result, payload: payload})
     })

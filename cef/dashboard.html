@@ -1,0 +1,88 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+    <title>Dashboard</title>
+    <link rel="stylesheet" type="text/css" href="http://getskeleton.com/dist/css/skeleton.css">
+    <style>
+    body {
+        font-family: Menlo, Consolas, monospace;
+    }
+    table th {
+        text-align: center;
+    }
+    </style>
+    <script src="https://unpkg.com/vue@latest/dist/vue.js"></script>
+</head>
+<body>
+<section>
+    <div class="container">
+        <div class="row">
+            <div id="app">
+                <div class="twelve columns">
+                    <button v-on:click="populate">Attack!</button><span> {{ message }}</span>
+                </div>
+                <table v-if="results.length > 0" class="center">
+                    <thead>
+                        <tr><th>created</th><th>target</th><th>payload</th><th>node</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr is="result-row" v-for="result in results" v-bind:key="result.id" v-bind:result="result"></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</section>
+<script>
+
+// make the event source global so it is exposed in the dom
+var evtSource = false;
+
+Vue.component('result-row', {
+  props: ['result'],
+  template: '<tr><td>{{ result.created }}</td><td>{{ result.attack.url }}</td><td>{{ result.payload }}</td><td>{{ result.node.fingerprint }}</td></tr>'
+});
+
+// define tha vue app
+var app = new Vue({
+    el: '#app',
+    data: {
+        results: [],
+        message: '',
+    },
+    methods: {
+        populate: function(event) {
+            fetch('/queue')
+            .then(response => response.text())
+            .then(text => {
+                this.message = 'attacking...';text;
+            })
+        },
+        setupStream: function(event) {
+            evtSource = new EventSource("/stream/results");
+            evtSource.addEventListener('message', event => {
+                var data = JSON.parse(event.data);
+                this.results.push(data);
+            }, false);
+        },
+        teardownStream: function(event) {
+            if (evtSource !== false) {
+                evtSource.close();
+            }
+        }
+    },
+    mounted() {
+        // preload results
+        fetch('/results')
+        .then(response => response.json())
+        .then(json => {
+            this.results = json.results;
+        });
+        // manage stream
+        this.setupStream();
+        window.addEventListener('beforeunload', this.teardownStream, false);
+    }
+})
+</script>
+</body>
+</html>

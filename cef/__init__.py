@@ -2,6 +2,7 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from queue import Queue
 import os
+import redis
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 
@@ -18,8 +19,13 @@ db = SQLAlchemy(app)
 
 # streaming setup
 
-attack_queue = Queue()
-result_queue = Queue()
+rs = redis.StrictRedis({
+    'host': 'localhost',
+    'port': 6379,
+    'db': 0,
+    'charset': 'utf-8',
+    'decode_responses': True,
+})
 
 import cef.views
 

