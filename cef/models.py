@@ -7,6 +7,10 @@ class BaseModel(db.Model):
     created = db.Column(db.DateTime, nullable=False, default=datetime.datetime.now)
 
     @property
+    def created_as_string(self):
+        return self.created.strftime("%Y-%m-%d %H:%M:%S")
+
+    @property
     def _name(self):
         return self.__class__.__name__.lower()
 
@@ -22,6 +26,14 @@ class Node(BaseModel):
     def get_by_fingerprint(fp):
         return Node.query.filter_by(fingerprint=fp).first()
 
+    def serialize(self):
+        return {
+            'id': self.id,
+            'fingerprint': self.fingerprint,
+            'ip_address': self.ip_address,
+            'user_agent': self.user_agent,
+        }
+
 class Attack(BaseModel):
     __tablename__ = 'attacks'
     method = db.Column(db.String, nullable=False)
@@ -32,8 +44,24 @@ class Attack(BaseModel):
     fail = db.Column(db.String, nullable=False)
     results = db.relationship('Result', backref=db.backref('attack'), cascade="all, delete-orphan")
 
+    def serialize(self):
+        return {
+            'id': self.id,
+            'url': self.url,
+        }
+
 class Result(BaseModel):
     __tablename__ = 'results'
     attack_id = db.Column(db.Integer, db.ForeignKey('attacks.id'), nullable=False)
     node_id = db.Column(db.Integer, db.ForeignKey('nodes.id'), nullable=False)
     payload = db.Column(db.String, nullable=False)
+
+    def serialize(self):
+        return {
+            'id': self.id,
+            'created': self.created_as_string,
+            'node_id': self.node_id,
+            'payload': self.payload,
+            'attack': Attack.query.get(self.attack_id).serialize(),
+            'node': Node.query.get(self.node_id).serialize(),
+        }
