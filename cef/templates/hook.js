@@ -1,4 +1,4 @@
-var evtSource = new EventSource("{{ url_for('stream_attack', _external=True) }}");
+var evtSource = new EventSource("{{ url_for('stream_attacks', _external=True) }}");
 
 evtSource.addEventListener('message', event => {
     var data = JSON.parse(event.data);
@@ -54,7 +54,7 @@ function executeAttack(data) {
 }
 
 function reportResult(result, id, payload) {
-    fetch("{{ url_for('report_result', _external=True) }}", {
+    fetch("{{ url_for('create_result', _external=True) }}", {
         method: "POST",
         body: JSON.stringify({id: id, result: result, payload: payload})
     })

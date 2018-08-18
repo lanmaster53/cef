@@ -1,0 +1,136 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+    <title>Dashboard</title>
+    <link rel="stylesheet" type="text/css" href="http://getskeleton.com/dist/css/skeleton.css">
+    <style>
+    body {
+        font-family: Menlo, Consolas, monospace;
+    }
+    table th {
+        text-align: center;
+    }
+    select {
+        font-size: inherit;
+    }
+    </style>
+    <script src="https://unpkg.com/vue@latest/dist/vue.js"></script>
+</head>
+<body>
+{% raw %}
+<section>
+    <div class="container">
+        <div class="row">
+            <div id="app">
+                <div class="twelve columns">
+                    <label for="attack">Select an attack:</label>
+                    <select v-model="attack">
+                        <option v-for="attack in attacks" v-bind:value="attack.id">{{ attack.url }}</option>
+                    </select>
+                    <br>
+                    <button v-on:click="runAttack">Attack!</button><span> {{ message }}</span>
+                    <hr>
+                </div>
+                <table v-if="results.length > 0" class="center">
+                    <thead>
+                        <tr><th>created</th><th>target</th><th>payload</th><th>node</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="result in results" v-bind:key="result.id" v-bind:result="result"><td>{{ result.created }}</td><td>{{ result.attack.url }}</td><td>{{ result.payload }}</td><td>{{ result.node.fingerprint }}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</section>
+<script>
+// for vue components
+//Vue.component('select-option', {
+//  props: ['value', 'text'],
+//  template: ''
+//});
+</script>
+{% endraw %}
+<script>
+// make the event source global so it is exposed in the dom
+var evtSource = false;
+
+// define tha vue app
+var app = new Vue({
+    el: '#app',
+    data: {
+        results: [],
+        message: '',
+        attack: '',
+        attacks: [],
+    },
+    methods: {
+        runAttack: function(event) {
+            fetch('{{ url_for('run_attack', attack_id='') }}'+this.attack)
+            .then(response => response.text())
+            .then(text => {
+                // update the status
+                this.getStatus();
+            })
+        },
+        setupStream: function(event) {
+            evtSource = new EventSource("{{ url_for('stream_results') }}");
+            evtSource.addEventListener('message', event => {
+                var data = JSON.parse(event.data);
+                this.results.push(data);
+            }, false);
+        },
+        teardownStream: function(event) {
+            if (evtSource !== false) {
+                evtSource.close();
+            }
+        },
+        getResults: function(event) {
+            fetch('{{ url_for('get_results') }}')
+            .then(response => response.json())
+            .then(json => {
+                this.results = json.results;
+            });
+        },
+        getAttacks: function(event) {
+            fetch('{{ url_for('get_attacks') }}')
+            .then(response => response.json())
+            .then(json => {
+                this.attacks = json.attacks;
+                if (this.attacks.length > 0) {
+                    this.attack = 1;
+                }
+            });
+        },
+        getStatus: function(event) {
+            fetch('{{ url_for('get_status') }}')
+            .then(response => response.json())
+            .then(json => {
+                this.message = json.status.message;
+                if (json.status.length > 0) {
+                    this.message += ' '+json.status.length;
+                }
+            });
+        }
+    },
+    created() {
+        // preload results
+        this.getResults();
+        // preload attacks
+        this.getAttacks();
+        // preload status
+        this.getStatus();
+        // setup stream
+        this.setupStream();
+        window.addEventListener('beforeunload', this.teardownStream, false);
+    },
+    mounted() {
+        // maintain status
+        setInterval(function () {
+            this.getStatus();
+        }.bind(this), 5000); 
+    }
+})
+</script>
+</body>
+</html>
