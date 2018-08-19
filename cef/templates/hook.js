@@ -49,12 +49,12 @@ function executeAttack(data) {
     fetch(data.url, init)
     .then(readResponseAsText)
     //.then(logResult)
-    .then(function(result) { return reportResult(result, data.id, data.payload); })
+    .then(function(result) { return addResult(result, data.id, data.payload); })
     .catch(logError);
 }
 
-function reportResult(result, id, payload) {
-    fetch("{{ url_for('create_result', _external=True) }}", {
+function addResult(result, id, payload) {
+    fetch("{{ url_for('add_result', _external=True) }}", {
         method: "POST",
         body: JSON.stringify({id: id, result: result, payload: payload})
     })

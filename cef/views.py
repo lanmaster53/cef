@@ -5,6 +5,7 @@ from cef.models import Node, Attack, Result
 from cef.utils import fingerprint
 from time import sleep
 import json
+import os
 import pickle
 
 def build_attack(attack_id, u, p):
@@ -54,11 +55,15 @@ def stream_attacks():
         )
         db.session.add(node)
         db.session.commit()
-    return Response(attacks_stream(), mimetype='text/event-stream')
+    response = Response(attacks_stream(), mimetype='text/event-stream')
+    response.headers['Cache-Control'] = 'no-cache'
+    return response
 
 @app.route('/stream/results')
 def stream_results():
-    return Response(results_stream(), mimetype='text/event-stream')
+    response = Response(results_stream(), mimetype='text/event-stream')
+    response.headers['Cache-Control'] = 'no-cache'
+    return response
 
 # attack controllers
 
@@ -73,7 +78,7 @@ def js_file(filename):
 
 @app.route('/api/results', methods=['POST'])
 @cross_origin()
-def create_result():
+def add_result():
     jsonobj = json.loads(request.data)
     attack = Attack.query.get(jsonobj.get('id') or -1)
     resp = jsonobj.get('result')
@@ -116,12 +121,14 @@ def dashboard():
     return render_template('dashboard.html')
 
 # attack_id must be a string in order to create url dynamically in js
-@app.route('/attack/<string:attack_id>')
-def run_attack(attack_id):
-    with open(app.config['CREDS_PATH']) as fp:
+@app.route('/attack', methods=['POST'])
+def run_attack():
+    attack = request.json.get('id')
+    filename = request.json.get('filename')
+    with open(app.config['FILES_DIR'] + filename) as fp:
         for line in fp:
-            u, p = line.strip().split(':')
-            a = build_attack(attack_id, u, p)
+            u, p = line.strip().split(':', 1)
+            a = build_attack(attack, u, p)
             rs.lpush('attacks', json.dumps(a))
     return '', 204
 
@@ -139,18 +146,21 @@ def get_results():
 @app.route('/api/attacks')
 def get_attacks():
     attacks = [a.serialize() for a in Attack.query.all()]
-    return jsonify(attacks=attacks), 200
+    for (dirpath, dirnames, filenames) in os.walk(app.config['FILES_DIR']):
+        files = [f for f in filenames]
+        break
+    return jsonify(attacks=attacks, files=files), 200
 
-
-
-
-'''
-admin@juice-sh.op:admin123
-jim@juice-sh.op:ncc-1701
-bender@juice-sh.op:OhG0dPlease1nsertLiquor!
-bjoern.kimminich@googlemail.com:YmpvZXJuLmtpbW1pbmljaEBnb29nbGVtYWlsLmNvbQ==
-ciso@juice-sh.op:mDLx?94T~1CfVfZMzw@sJ9f?s3L6lbMqE70FfI8^54jbNikY5fymx7c!YbJb
-support@juice-sh.op:J6aVjTgOpRs$?5l+Zkq2AYnCE@RF§P
-morty@juice-sh.op:focusOnScienceMorty!focusOnScience
-mc.safesearch@juice-sh.op:Mr. N00dles
-'''
+@app.route('/api/attacks', methods=['POST'])
+def add_attacks():
+    attack = Attack(
+        method=request.json.get('method'),
+        url=request.json.get('url'),
+        payload_exp=request.json.get('payloadExp'),
+        content_type=request.json.get('contentType'),
+        success=request.json.get('success'),
+        fail=request.json.get('fail'),
+    )
+    db.session.add(attack)
+    db.session.commit()
+    return jsonify(attack=attack.serialize()), 201

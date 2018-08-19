@@ -11,7 +11,7 @@ DEBUG = True
 SECRET_KEY = 'dosentmatter'
 SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(basedir, 'cef.db')
 SQLALCHEMY_TRACK_MODIFICATIONS = False
-CREDS_PATH = '/Users/lanmaster/Development/Repositories/cef/creds.txt'
+FILES_DIR = '/Users/lanmaster/Development/Repositories/cef/lists/'
 
 app = Flask(__name__)
 app.config.from_object(__name__)
