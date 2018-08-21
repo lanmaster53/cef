@@ -5,154 +5,130 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <!--link rel="stylesheet" type="text/css" href="https://necolas.github.io/normalize.css/8.0.0/normalize.css"-->
     <link rel="stylesheet" type="text/css" href="http://getskeleton.com/dist/css/skeleton.css">
-    <style>
-    body {
-        font-family: Menlo, Consolas, monospace;
-    }
-    h3 {
-        text-align: center;
-    }
-    table th {
-        text-align: center;
-    }
-    select,
-    input {
-        font-size: inherit;
-    }
-    hr {
-        margin: 1rem 0;
-    }
-    .collapsible {
-        cursor: pointer;
-    }
-    .collapsible:before {
-        content: "\002B";
-        font-weight: bold;
-        margin-left: 1rem;
-        margin-right: 1rem;
-    }
-    .active:before {
-        content: "\2212";
-    }
-    .content {
-        max-height: 0;
-        overflow: hidden;
-        transition: max-height 0.25s ease-out;
-    }
-    </style>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/custom.css') }}">
     <script src="https://unpkg.com/vue@latest/dist/vue.js"></script>
 </head>
 <body>
-{% raw %}
 <div id="app">
     <div class="container">
         <div class="row">
-                <div class="twelve columns">
-                    <h3>CORS Exploitation Framework (CEF)</h3>
-                    <label class="collapsible" v-on:click="collapse">add an attack</label>
-                    <div class="content">
-                        <form v-on:submit.prevent="addAttack">
-                            <input type="text" v-model="attackForm.method" placeholder="method"> <span>http method for the attack</span><br>
-                            <input type="text" v-model="attackForm.url" placeholder="url"> <span>target url for the attack</span><br>
-                            <input type="text" v-model="attackForm.payloadExp" placeholder="payload expression"> <span>python expression using 'u' and 'p'</span><br>
-                            <input type="text" v-model="attackForm.contentType" placeholder="content type"> <span>content type header value of the payload</span><br>
-                            <input type="text" v-model="attackForm.success" placeholder="success match"> <span>string in response indicating success</span><br>
-                            <input type="text" v-model="attackForm.fail" placeholder="failure match"> <span>string in response indicating failure</span><br>
-                            <button type="submit">add attack</button>
-                        </form>
-                    </div>
-
-                    <hr>
-
-                    <label class="collapsible" v-on:click="collapse">run an attack</label>
-                    <div class="content">
-                        <select v-model="attack">
-                            <option v-for="attack in attacks" v-bind:value="attack.id">{{ attack.url }}</option>
-                        </select><br>
-                        <select v-model="filename">
-                            <option v-for="file in files">{{ file }}</option>
-                        </select><br>
-                        <button v-on:click="runAttack">run attack!</button> <span>{{ status }}</span>
-                    </div>
-
-                    <hr>
-
-                    <label class="collapsible" v-on:click="collapse">view results ({{ results.length }})</label>
-                    <div class="content">
-                        <table v-if="results.length > 0" class="center">
-                            <thead>
-                                <tr><th>created</th><th>target</th><th>payload</th><th>node</th></tr>
-                            </thead>
-                            <tbody>
-                                <tr v-for="result in results" v-bind:key="result.id" v-bind:result="result"><td>{{ result.created }}</td><td>{{ result.attack.url }}</td><td>{{ result.payload }}</td><td>{{ result.node.fingerprint }}</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <hr>
-
-                </div>
+            <dashboard></dashboard>
         </div>
     </div>
 </div>
-{% endraw %}
 <script>
-// make the event source global so it is exposed in the dom
-var evtSource = false;
+Vue.component('dashboard', {
+    template: {% raw %}`
+        <div class="twelve columns">
+            <h3>CORS Exploitation Framework (CEF)</h3>
+            <panel label="add an attack">
+                <add-attack></add-attack>
+            </panel>
+            <panel label="run an attack">
+                <run-attack></run-attack>
+            </panel>
+            <panel label="view results">
+                <view-results></view-results>
+            </panel>
+        </div>
+    `{% endraw %},
+});
 
-// define tha vue app
-var app = new Vue({
-    el: '#app',
-    data: {
-        attackForm: {
-            method: '',
-            url: '',
-            payloadExp: '',
-            contentType: '',
-            success: '',
-            fail: '',
+Vue.component('panel', {
+    props: ['label'],
+    template: {% raw %}`
+        <div>
+            <label class="collapsible" v-on:click="collapse">{{ label }}</label>
+            <div class="content">
+                <slot></slot>
+            </div>
+        </div>
+    `{% endraw %},
+    methods: {
+        collapse: function(event) {
+            event.target.classList.toggle("active");
+            var content = event.target.nextElementSibling;
+            if (content.style.display === "block") {
+                content.style.display = "none";
+            } else {
+                content.style.display = "block";
+            }
         },
-        attack: '',
-        attacks: [],
-        filename: '',
-        files: [],
-        status: '',
-        results: [],
+    }
+});
+
+Vue.component('add-attack', {
+    template: {% raw %}`
+        <div>
+            <form v-on:submit.prevent="addAttack">
+                <input type="text" v-model="attackForm.method" placeholder="method"> <span>http method for the attack</span><br>
+                <input type="text" v-model="attackForm.url" placeholder="url"> <span>target url for the attack</span><br>
+                <input type="text" v-model="attackForm.payloadExp" placeholder="payload expression"> <span>python expression using 'u' and 'p'</span><br>
+                <input type="text" v-model="attackForm.contentType" placeholder="content type"> <span>content type header value of the payload</span><br>
+                <input type="text" v-model="attackForm.success" placeholder="success match"> <span>string in response indicating success</span><br>
+                <input type="text" v-model="attackForm.fail" placeholder="failure match"> <span>string in response indicating failure</span><br>
+                <button type="submit">add attack</button>
+            </form>
+            <hr>
+        </div>
+    `{% endraw %},
+    data: function() {
+        return {
+            attackForm: {
+                method: '',
+                url: '',
+                payloadExp: '',
+                contentType: '',
+                success: '',
+                fail: '',
+            },
+        }
     },
     methods: {
-        runAttack: function(event) {
-            fetch('{{ url_for('run_attack') }}', {
+        addAttack: function(event) {
+            fetch('{{ url_for('add_attacks') }}', {
                   method: 'POST',
-                  body: JSON.stringify({id: this.attack, filename: this.filename}),
+                  body: JSON.stringify(this.attackForm),
                   headers:{
                     'Content-Type': 'application/json'
                   }
             })
-            .then(response => response.text())
-            .then(text => {
-                // update the status
-                this.getStatus();
-            })
-        },
-        setupStream: function(event) {
-            evtSource = new EventSource("{{ url_for('stream_results') }}");
-            evtSource.addEventListener('message', event => {
-                var data = JSON.parse(event.data);
-                this.results.push(data);
-            }, false);
-        },
-        teardownStream: function(event) {
-            if (evtSource !== false) {
-                evtSource.close();
-            }
-        },
-        getResults: function(event) {
-            fetch('{{ url_for('get_results') }}')
             .then(response => response.json())
             .then(json => {
-                this.results = json.results;
-            });
+                // update the attack select
+                // FIX: this.attacks.push(json.attack);
+                // reset the form
+                Object.keys(this.attackForm).forEach((k) => {
+                    this.attackForm[k] = '';
+                });
+            })
         },
+    },
+});
+
+Vue.component('run-attack', {
+    template: {% raw %}`
+        <div>
+            <select v-model="attack">
+                <option v-for="attack in attacks" v-bind:value="attack.id">{{ attack.url }}</option>
+            </select><br>
+            <select v-model="filename">
+                <option v-for="file in files">{{ file }}</option>
+            </select><br>
+            <button v-on:click="runAttack">run attack!</button> <span>{{ status }}</span>
+            <hr>
+        </div>
+    `{% endraw %},
+    data: function() {
+        return {
+            attack: '',
+            attacks: [],
+            filename: '',
+            files: [],
+            status: '',
+        }
+    },
+    methods: {
         getAttacks: function(event) {
             fetch('{{ url_for('get_attacks') }}')
             .then(response => response.json())
@@ -167,6 +143,20 @@ var app = new Vue({
                 }
             });
         },
+        runAttack: function(event) {
+            fetch('{{ url_for('run_attack') }}', {
+                  method: 'POST',
+                  body: JSON.stringify({id: this.attack, filename: this.filename}),
+                  headers:{
+                    'Content-Type': 'application/json'
+                  }
+            })
+            .then(response => response.text())
+            .then(text => {
+                // update the status
+                this.getStatus();
+            })
+        },
         getStatus: function(event) {
             fetch('{{ url_for('get_status') }}')
             .then(response => response.json())
@@ -175,54 +165,82 @@ var app = new Vue({
                 if (json.status.length > 0) {
                     this.status += ' '+json.status.length;
                 }
-                this.getResults();
             });
-        },
-        addAttack: function(event) {
-            fetch('{{ url_for('add_attacks') }}', {
-                  method: 'POST',
-                  body: JSON.stringify(this.attackForm),
-                  headers:{
-                    'Content-Type': 'application/json'
-                  }
-            })
-            .then(response => response.json())
-            .then(json => {
-                // update the attack select
-                this.attacks.push(json.attack);
-                // reset the form
-                Object.keys(this.attackForm).forEach((k) => {
-                    this.attackForm[k] = '';
-                });
-            })
-        },
-        collapse: function(event) {
-            event.target.classList.toggle("active");
-            var content = event.target.nextElementSibling;
-            if (content.style.maxHeight) {
-                content.style.maxHeight = null;
-            } else {
-                content.style.maxHeight = content.scrollHeight + "px";
-            }
         },
     },
     created() {
-        // preload results
-        this.getResults();
         // preload attacks
         this.getAttacks();
         // preload status
         this.getStatus();
-        // setup stream
-        //this.setupStream();
-        //window.addEventListener('beforeunload', this.teardownStream, false);
     },
     mounted() {
         // maintain status
         setInterval(function () {
             this.getStatus();
         }.bind(this), 5000); 
-    }
+    },
+});
+
+Vue.component('view-results', {
+    template: {% raw %}`
+        <div>
+            <table v-if="results.length > 0" class="center">
+                <thead>
+                    <tr><th>created</th><th>target</th><th>payload</th><th>node</th></tr>
+                </thead>
+                <tbody>
+                    <tr v-for="result in results" v-bind:key="result.id" v-bind:result="result"><td>{{ result.created }}</td><td>{{ result.attack.url }}</td><td>{{ result.payload }}</td><td>{{ result.node.fingerprint }}</td></tr>
+                </tbody>
+            </table>
+            <hr>
+        </div>
+    `{% endraw %},
+    data: function() {
+        return {
+            results: [],
+        }
+    },
+    evtSource: false,
+    methods: {
+        setupStream: function(event) {
+            this.$options.evtSource = new EventSource("{{ url_for('stream_results') }}");
+            this.$options.evtSource.addEventListener('message', event => {
+                var data = JSON.parse(event.data);
+                this.results.push(data);
+            }, false);
+        },
+        teardownStream: function(event) {
+            if (this.$options.evtSource !== false) {
+                this.$options.evtSource.close();
+            }
+        },
+        getResults: function(event) {
+            fetch('{{ url_for('get_results') }}')
+            .then(response => response.json())
+            .then(json => {
+                this.results = json.results;
+            });
+        },
+    },
+    created() {
+        // preload results
+        this.getResults();
+        // setup stream
+        //this.setupStream();
+        //window.addEventListener('beforeunload', this.teardownStream, false);
+    },
+    mounted() {
+        // maintain results
+        setInterval(function () {
+            this.getResults();
+        }.bind(this), 5000); 
+    },
+});
+
+// define tha vue app
+var app = new Vue({
+    el: '#app',
 });
 </script>
 </body>
