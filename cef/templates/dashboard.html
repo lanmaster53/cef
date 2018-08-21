@@ -2,6 +2,8 @@
 <html>
 <head>
     <title>Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!--link rel="stylesheet" type="text/css" href="https://necolas.github.io/normalize.css/8.0.0/normalize.css"-->
     <link rel="stylesheet" type="text/css" href="http://getskeleton.com/dist/css/skeleton.css">
     <style>
     body {
@@ -29,27 +31,24 @@
         margin-left: 1rem;
         margin-right: 1rem;
     }
-
     .active:before {
         content: "\2212";
     }
     .content {
-        display: none;
-        transition: max-height 0.2s ease-out;
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.25s ease-out;
     }
     </style>
     <script src="https://unpkg.com/vue@latest/dist/vue.js"></script>
 </head>
 <body>
 {% raw %}
-<section>
+<div id="app">
     <div class="container">
         <div class="row">
-            <div id="app">
                 <div class="twelve columns">
-
                     <h3>CORS Exploitation Framework (CEF)</h3>
-
                     <label class="collapsible" v-on:click="collapse">add an attack</label>
                     <div class="content">
                         <form v-on:submit.prevent="addAttack">
@@ -93,17 +92,9 @@
                     <hr>
 
                 </div>
-            </div>
         </div>
     </div>
-</section>
-<script>
-// for vue components
-//Vue.component('select-option', {
-//  props: ['value', 'text'],
-//  template: ''
-//});
-</script>
+</div>
 {% endraw %}
 <script>
 // make the event source global so it is exposed in the dom
@@ -208,10 +199,10 @@ var app = new Vue({
         collapse: function(event) {
             event.target.classList.toggle("active");
             var content = event.target.nextElementSibling;
-            if (content.style.display === "block") {
-                content.style.display = "none";
+            if (content.style.maxHeight) {
+                content.style.maxHeight = null;
             } else {
-                content.style.display = "block";
+                content.style.maxHeight = content.scrollHeight + "px";
             }
         },
     },
@@ -232,7 +223,7 @@ var app = new Vue({
             this.getStatus();
         }.bind(this), 5000); 
     }
-})
+});
 </script>
 </body>
 </html>
