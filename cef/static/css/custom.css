@@ -6,8 +6,27 @@ h3 {
     text-align: center;
 }
 
-table th {
+table {
+    border-collapse: collapse;
+}
+
+td:first-child {
+    border-left: 3px solid red;
+}
+
+th {
     text-align: center;
+}
+
+th,
+td {
+    padding: 0.25rem 0 0.25rem 1rem !important;
+    border: 0;
+}
+
+th:first-child,
+td:first-child {
+    font-weight: bold;
 }
 
 form {
@@ -23,8 +42,15 @@ hr {
     margin: 1rem 0;
 }
 
+.status {
+    color: red;
+}
+
 .collapsible {
     cursor: pointer;
+    margin-bottom: 1rem;
+    padding: 0.5rem;
+    background-color: #eee;
 }
 
 .collapsible:before {

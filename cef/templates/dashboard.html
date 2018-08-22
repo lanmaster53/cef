@@ -17,30 +17,108 @@
     </div>
 </div>
 <script>
+/*
+https://paweljw.github.io/2017/09/vue.js-front-end-app-part-3-authentication/
+https://gist.github.com/brianboyko/91fdfb492071e743e389d84eee002342
+https://designhammer.com/blog/reusable-vuejs-components-part-2-basic-drop-down-and-v-model
+*/
 Vue.component('dashboard', {
     template: {% raw %}`
         <div class="twelve columns">
             <h3>CORS Exploitation Framework (CEF)</h3>
-            <panel label="add an attack">
-                <add-attack></add-attack>
+            <p>status: <span class="status">{{ status }}</span></p>
+            <panel v-bind:label="'add an attack'">
+                <add-attack v-on:click="getAttacks"/>
             </panel>
-            <panel label="run an attack">
-                <run-attack></run-attack>
+            <panel v-bind:label="'run an attack'">
+                <run-attack
+                    v-bind:attacks="attacks"
+                    v-bind:files="files"
+                    v-on:click="getStatus"
+                />
             </panel>
-            <panel label="view results">
-                <view-results></view-results>
+            <panel v-bind:label="'view results ('+results.length+')'">
+                <view-results v-bind:results="results"/>
             </panel>
         </div>
     `{% endraw %},
+    data: function() {
+        return {
+            attacks: [],
+            files: [],
+            results: [],
+            status: '',
+        }
+    },
+    evtSource: false,
+    methods: {
+        setupStream: function(event) {
+            this.$options.evtSource = new EventSource("{{ url_for('stream_results') }}");
+            this.$options.evtSource.addEventListener('message', event => {
+                var data = JSON.parse(event.data);
+                this.results.push(data);
+            }, false);
+        },
+        teardownStream: function(event) {
+            if (this.$options.evtSource !== false) {
+                this.$options.evtSource.close();
+            }
+        },
+        getAttacks: function(event) {
+            fetch('{{ url_for('get_attacks') }}')
+            .then(response => response.json())
+            .then(json => {
+                this.attacks = json.attacks;
+                this.files = json.files;
+            });
+        },
+        getStatus: function(event) {
+            fetch('{{ url_for('get_status') }}')
+            .then(response => response.json())
+            .then(json => {
+                this.status = json.status.message;
+                if (json.status.length > 0) {
+                    this.status += ' '+json.status.length;
+                }
+            });
+        },
+        getResults: function(event) {
+            fetch('{{ url_for('get_results') }}')
+            .then(response => response.json())
+            .then(json => {
+                this.results = json.results;
+            });
+        },
+    },
+    created() {
+        // preload attacks
+        this.getAttacks();
+        // preload status
+        this.getStatus();
+        // preload results
+        this.getResults();
+        // setup stream
+        //this.setupStream();
+        //window.addEventListener('beforeunload', this.teardownStream, false);
+    },
+    mounted() {
+        // maintain results
+        setInterval(function () {
+            this.getResults();
+            this.getStatus();
+        }.bind(this), 5000); 
+    },
 });
 
 Vue.component('panel', {
-    props: ['label'],
+    props: {
+        label: String,
+    },
     template: {% raw %}`
         <div>
             <label class="collapsible" v-on:click="collapse">{{ label }}</label>
             <div class="content">
-                <slot></slot>
+                <slot/>
             </div>
         </div>
     `{% endraw %},
@@ -48,6 +126,7 @@ Vue.component('panel', {
         collapse: function(event) {
             event.target.classList.toggle("active");
             var content = event.target.nextElementSibling;
+            // toggle display
             if (content.style.display === "block") {
                 content.style.display = "none";
             } else {
@@ -69,7 +148,6 @@ Vue.component('add-attack', {
                 <input type="text" v-model="attackForm.fail" placeholder="failure match"> <span>string in response indicating failure</span><br>
                 <button type="submit">add attack</button>
             </form>
-            <hr>
         </div>
     `{% endraw %},
     data: function() {
@@ -95,8 +173,8 @@ Vue.component('add-attack', {
             })
             .then(response => response.json())
             .then(json => {
-                // update the attack select
-                // FIX: this.attacks.push(json.attack);
+                // update the attack select (getAttacks)
+                this.$emit('click');
                 // reset the form
                 Object.keys(this.attackForm).forEach((k) => {
                     this.attackForm[k] = '';
@@ -107,42 +185,30 @@ Vue.component('add-attack', {
 });
 
 Vue.component('run-attack', {
+    props: {
+        attacks: Array,
+        files: Array,
+    },
     template: {% raw %}`
         <div>
             <select v-model="attack">
+                <option value="" disabled>select a target</option>
                 <option v-for="attack in attacks" v-bind:value="attack.id">{{ attack.url }}</option>
             </select><br>
             <select v-model="filename">
-                <option v-for="file in files">{{ file }}</option>
+                <option value="" disabled>select a list</option>
+                <option v-for="file in files" v-bind:value="file">{{ file }}</option>
             </select><br>
-            <button v-on:click="runAttack">run attack!</button> <span>{{ status }}</span>
-            <hr>
+            <button v-on:click="runAttack">run attack!</button>
         </div>
     `{% endraw %},
     data: function() {
         return {
             attack: '',
-            attacks: [],
             filename: '',
-            files: [],
-            status: '',
         }
     },
     methods: {
-        getAttacks: function(event) {
-            fetch('{{ url_for('get_attacks') }}')
-            .then(response => response.json())
-            .then(json => {
-                this.attacks = json.attacks;
-                if (this.attacks.length > 0) {
-                    this.attack = 1;
-                }
-                this.files = json.files;
-                if (this.files.length > 0) {
-                    this.filename = json.files[0];
-                }
-            });
-        },
         runAttack: function(event) {
             fetch('{{ url_for('run_attack') }}', {
                   method: 'POST',
@@ -151,91 +217,30 @@ Vue.component('run-attack', {
                     'Content-Type': 'application/json'
                   }
             })
-            .then(response => response.text())
-            .then(text => {
-                // update the status
-                this.getStatus();
+            .then(response => {
+                // update the status (getStatus)
+                this.$emit('click');
             })
         },
-        getStatus: function(event) {
-            fetch('{{ url_for('get_status') }}')
-            .then(response => response.json())
-            .then(json => {
-                this.status = json.status.message;
-                if (json.status.length > 0) {
-                    this.status += ' '+json.status.length;
-                }
-            });
-        },
-    },
-    created() {
-        // preload attacks
-        this.getAttacks();
-        // preload status
-        this.getStatus();
-    },
-    mounted() {
-        // maintain status
-        setInterval(function () {
-            this.getStatus();
-        }.bind(this), 5000); 
     },
 });
 
 Vue.component('view-results', {
+    props: {
+        results: Array,
+    },
     template: {% raw %}`
         <div>
-            <table v-if="results.length > 0" class="center">
-                <thead>
-                    <tr><th>created</th><th>target</th><th>payload</th><th>node</th></tr>
-                </thead>
+            <table v-for="result in results" v-bind:key="result.id" v-bind:result="result">
                 <tbody>
-                    <tr v-for="result in results" v-bind:key="result.id" v-bind:result="result"><td>{{ result.created }}</td><td>{{ result.attack.url }}</td><td>{{ result.payload }}</td><td>{{ result.node.fingerprint }}</td></tr>
+                    <tr><td>time</td><td>{{ result.created }}</td><tr>
+                    <tr><td>target</td><td>{{ result.attack.url }}</td></tr>
+                    <tr><td>payload</td><td>{{ result.payload }}</td></tr>
+                    <tr><td>node</td><td>{{ result.node.fingerprint }}</td></tr>
                 </tbody>
             </table>
-            <hr>
         </div>
     `{% endraw %},
-    data: function() {
-        return {
-            results: [],
-        }
-    },
-    evtSource: false,
-    methods: {
-        setupStream: function(event) {
-            this.$options.evtSource = new EventSource("{{ url_for('stream_results') }}");
-            this.$options.evtSource.addEventListener('message', event => {
-                var data = JSON.parse(event.data);
-                this.results.push(data);
-            }, false);
-        },
-        teardownStream: function(event) {
-            if (this.$options.evtSource !== false) {
-                this.$options.evtSource.close();
-            }
-        },
-        getResults: function(event) {
-            fetch('{{ url_for('get_results') }}')
-            .then(response => response.json())
-            .then(json => {
-                this.results = json.results;
-            });
-        },
-    },
-    created() {
-        // preload results
-        this.getResults();
-        // setup stream
-        //this.setupStream();
-        //window.addEventListener('beforeunload', this.teardownStream, false);
-    },
-    mounted() {
-        // maintain results
-        setInterval(function () {
-            this.getResults();
-        }.bind(this), 5000); 
-    },
 });
 
 // define tha vue app
