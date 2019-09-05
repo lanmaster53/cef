@@ -1,4 +1,5 @@
-from cef import db
+from cef import db, bcrypt
+import binascii
 import datetime
 
 class BaseModel(db.Model):
@@ -13,6 +14,35 @@ class BaseModel(db.Model):
     @property
     def _name(self):
         return self.__class__.__name__.lower()
+
+class User(BaseModel):
+    __tablename__ = 'users'
+    username = db.Column(db.String, nullable=False, unique=True)
+    password_hash = db.Column(db.String)
+
+    @staticmethod
+    def get_by_username(username):
+        return User.query.filter_by(username=username).first()
+
+    @property
+    def password(self):
+        raise AttributeError('password: write-only field')
+
+    @password.setter
+    def password(self, password):
+        self.password_hash = bcrypt.generate_password_hash(binascii.hexlify(password.encode()))
+
+    def check_password(self, password):
+        return bcrypt.check_password_hash(self.password_hash, binascii.hexlify(password.encode()))
+
+    def serialize(self):
+        return {
+            'id': self.id,
+            'username': self.username,
+        }
+
+    def __repr__(self):
+        return "<User '{}'>".format(self.email)
 
 class Node(BaseModel):
     __tablename__ = 'nodes'

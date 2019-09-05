@@ -1,4 +1,5 @@
 from flask import Flask
+from flask_bcrypt import Bcrypt
 from flask_sqlalchemy import SQLAlchemy
 from queue import Queue
 import os
@@ -16,6 +17,7 @@ FILES_DIR = '/Users/lanmaster/Development/Repositories/cef/lists/'
 app = Flask(__name__)
 app.config.from_object(__name__)
 db = SQLAlchemy(app)
+bcrypt = Bcrypt(app)
 
 # streaming setup
 
@@ -43,6 +45,15 @@ def init_db():
     print('Database initialized.')
 
 def pop_db():
+    # seed a user
+    from cef.models import User
+    u = User(
+        username='tim',
+        password='password'
+    )
+    db.session.add(u)
+    db.session.commit()
+    # seed an attack
     from cef.models import Attack
     a = Attack(
         method='POST',

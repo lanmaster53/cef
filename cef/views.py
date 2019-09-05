@@ -1,12 +1,28 @@
-from flask import Flask, request, jsonify, render_template, Response, after_this_request, abort
+from flask import g, session, request, jsonify, render_template, Response, after_this_request, abort
 from flask_cors import cross_origin
 from cef import app, db, rs
-from cef.models import Node, Attack, Result
+from cef.models import User, Node, Attack, Result
 from cef.utils import fingerprint
+from functools import wraps
 from time import sleep
 import json
 import os
 import pickle
+
+@app.before_request
+def load_user():
+    g.user = None
+    uid = session.get('id')
+    if uid:
+        g.user = User.query.get(uid)
+
+def auth_required(func):
+    @wraps(func)
+    def wrapped(*args, **kwargs):
+        if g.user:
+            return func(*args, **kwargs)
+        abort(401)
+    return wrapped
 
 def build_attack(attack_id, u, p):
     attack = Attack.query.get(attack_id)
@@ -60,6 +76,7 @@ def stream_attacks():
     return response
 
 @app.route('/stream/results')
+@auth_required
 def stream_results():
     response = Response(results_stream(), mimetype='text/event-stream')
     response.headers['Cache-Control'] = 'no-cache'
@@ -79,7 +96,7 @@ def js_file(filename):
 @app.route('/api/results', methods=['POST'])
 @cross_origin()
 def add_result():
-    jsonobj = json.loads(request.data)
+    jsonobj = json.loads(request.data.decode('utf-8'))
     attack = Attack.query.get(jsonobj.get('id') or -1)
     resp = jsonobj.get('result')
     payload = jsonobj.get('payload')
@@ -116,12 +133,33 @@ def add_result():
 
 # dashboard controllers
 
-@app.route('/dashboard')
+@app.route('/')
 def dashboard():
     return render_template('dashboard.html')
 
+@app.route('/constants.js')
+def js_constants():
+    return render_template('constants.js')
+
+@app.route('/auth', methods=['POST'])
+def auth():
+    username = request.json.get('username')
+    password = request.json.get('password')
+    user = User.get_by_username(username)
+    response = {}
+    if user and user.check_password(password):
+        session['id'] = user.id
+        response['user'] = user.serialize()
+    return jsonify(**response), 200
+
+@app.route('/unauth')
+def unauth():
+    session.clear()
+    return '', 204
+
 # attack_id must be a string in order to create url dynamically in js
 @app.route('/attack', methods=['POST'])
+@auth_required
 def run_attack():
     attack = request.json.get('id')
     filename = request.json.get('filename')
@@ -133,17 +171,20 @@ def run_attack():
     return '', 204
 
 @app.route('/api/status')
+@auth_required
 def get_status():
     length = rs.llen('attacks')
     message = 'attacking...' if length else 'idle'
     return jsonify(status={'message': message, 'length': length}), 200
 
 @app.route('/api/results')
+@auth_required
 def get_results():
     results = [r.serialize() for r in Result.query.all()]
     return jsonify(results=results), 200
 
 @app.route('/api/attacks')
+@auth_required
 def get_attacks():
     attacks = [a.serialize() for a in Attack.query.all()]
     for (dirpath, dirnames, filenames) in os.walk(app.config['FILES_DIR']):
@@ -152,6 +193,7 @@ def get_attacks():
     return jsonify(attacks=attacks, files=files), 200
 
 @app.route('/api/attacks', methods=['POST'])
+@auth_required
 def add_attacks():
     attack = Attack(
         method=request.json.get('method'),

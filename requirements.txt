@@ -1,5 +1,6 @@
 Flask
-Flask-SQLAlchemy
+Flask-Bcrypt
 Flask-CORS
+Flask-SQLAlchemy
 gunicorn
 redis

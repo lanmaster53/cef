@@ -42,7 +42,8 @@ hr {
     margin: 1rem 0;
 }
 
-.status {
+.status,
+.error {
     color: red;
 }
 
